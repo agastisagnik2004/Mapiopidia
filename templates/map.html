@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mapiopidia</title>
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f6f5f0;
+      --card: #ffffff;
+      --ink: #1f2a1f;
+      --muted: #55635a;
+      --accent: #0f766e;
+      --border: #d9e0d9;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--ink);
+      background: radial-gradient(circle at 10% 0%, #e8f6ef 0%, transparent 45%), radial-gradient(circle at 100% 100%, #fff3d8 0%, transparent 40%), var(--bg);
+      min-height: 100vh;
+      padding: 22px;
+    }
+    .shell {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      gap: 14px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 8px 24px rgba(16, 38, 29, 0.06);
+    }
+    h1 { margin: 0 0 8px; font-size: 1.7rem; color: #ff8c00; }
+    p { margin: 0; color: #ff8c00; }
+    form {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .full { grid-column: 1 / -1; }
+    label {
+      font-size: 0.9rem;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 5px;
+    }
+    input, select, button {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font: inherit;
+      background: #fff;
+    }
+    select {
+      color: #ff8c00;
+      border-color: #ff8c00;
+    }
+    select:focus {
+      outline: none;
+      border-color: #ff8c00;
+      box-shadow: 0 0 0 2px rgba(255, 140, 0, 0.2);
+    }
+    button {
+      background: linear-gradient(120deg, #0f766e, #178f87);
+      color: white;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.6; cursor: wait; }
+    .warn {
+      display: none;
+      margin-top: 8px;
+      color: #b45309;
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 0.9rem;
+    }
+    .legend {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 8px 0;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+    .chip { padding: 4px 8px; border-radius: 999px; background: #eef2f7; }
+    #routeMap {
+      width: 100%;
+      height: 460px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-top: 12px;
+    }
+    .line { margin: 4px 0; font-size: 0.95rem; }
+    .label { color: var(--muted); }
+    .steps {
+      max-height: 280px;
+      overflow: auto;
+      padding-left: 20px;
+      margin: 8px 0 0;
+    }
+    .steps li { margin-bottom: 6px; }
+    .alt-row { margin: 4px 0; color: var(--muted); font-size: 0.92rem; }
+    @media (max-width: 900px) {
+      form, .grid { grid-template-columns: 1fr; }
+      #routeMap { height: 330px; }
+    }
+    /* hide MapLibre attribution control (visual only) */
+    .maplibregl-ctrl-attrib { display: none !important; }
+    /* style input placeholders as gray */
+    input::placeholder {
+      color: #999;
+      opacity: 0.7;
+    }
+    /* style input text as orange */
+    input {
+      color: #ff8c00;
+    }
+    input:focus {
+      color: #ff8c00;
+      outline: none;
+      border-color: #ff8c00;
+      box-shadow: 0 0 0 2px rgba(255, 140, 0, 0.2);
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="card">
+      <h1>Mapiopidia</h1>
+      <p><i>Shortest route finder</i></p>
+    </div>
+
+    <div class="card">
+      <form id="routeForm">
+        <div class="full">
+          <label for="origin">Origin</label>
+          <input id="origin" placeholder="Kolkata, India" required />
+        </div>
+        <div class="full">
+          <label for="destination">Destination</label>
+          <input id="destination" placeholder="Delhi, India" required />
+        </div>
+        <div>
+          <label for="vehicleClass">Vehicle Class</label>
+          <select id="vehicleClass">
+            {% for key, label in vehicle_classes.items() %}
+            <option value="{{ key }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="display:flex; align-items:end;">
+          <button id="submitBtn" type="submit">Find Shortest Path</button>
+        </div>
+      </form>
+      <div id="warning" class="warn"></div>
+    </div>
+
+    <div id="resultCard" class="card" style="display:none;">
+      <div id="summary"></div>
+      <div class="legend">
+        <span class="chip">Green: suggested shortest route</span>
+        <span class="chip">Gray: route alternatives</span>
+        <span class="chip">Orange dashed: connected steps line</span>
+      </div>
+      <div id="routeMap"></div>
+      <div id="vehicleInfo" class="card" style="margin-top:12px; padding:12px; background:#f0f9f8; border-color:#a7d8d1;"></div>
+      <div class="grid" id="modes"></div>
+      <div id="alternatives" style="margin-top:10px;"></div>
+      <div class="card" style="margin-top:12px; padding:12px;">
+        <h3 style="margin:0;">Driving Steps</h3>
+        <ol id="steps" class="steps"></ol>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script>
+    const modeLabels = { driving: "Driving", cycling: "Cycling", foot: "Walking" };
+    const warning = document.getElementById("warning");
+    const resultCard = document.getElementById("resultCard");
+    const summary = document.getElementById("summary");
+    const modes = document.getElementById("modes");
+    const steps = document.getElementById("steps");
+    const alternativesBox = document.getElementById("alternatives");
+    const submitBtn = document.getElementById("submitBtn");
+    let map;
+
+    function hm(minutes) {
+      const total = Math.round(minutes);
+      return `${Math.floor(total / 60)} hr ${total % 60} min`;
+    }
+
+    function ensureMap() {
+      if (map) return;
+      map = new maplibregl.Map({
+        container: "routeMap",
+        style: "https://api.maptiler.com/maps/streets-v2/style.json?key={{ maptiler_key }}",
+        center: [80, 22],
+        zoom: 4,
+        attributionControl: false
+      });
+      map.addControl(new maplibregl.NavigationControl(), "top-right");
+    }
+
+    function setSource(id, data) {
+      const src = map.getSource(id);
+      if (src) src.setData(data);
+      else map.addSource(id, { type: "geojson", data });
+    }
+
+    function ensureLineLayer(id, source, color, width, dash) {
+      if (map.getLayer(id)) return;
+      const paint = { "line-color": color, "line-width": width, "line-opacity": 0.95 };
+      if (dash) paint["line-dasharray"] = dash;
+      map.addLayer({ id, type: "line", source, layout: { "line-cap": "round", "line-join": "round" }, paint });
+    }
+
+    function ensurePointsLayer() {
+      if (map.getLayer("points")) return;
+      map.addLayer({
+        id: "points",
+        type: "circle",
+        source: "points-src",
+        paint: {
+          "circle-radius": 6,
+          "circle-color": ["match", ["get", "role"], "origin", "#0f766e", "#dc2626"],
+          "circle-stroke-color": "#fff",
+          "circle-stroke-width": 2
+        }
+      });
+    }
+
+    function fit(coords) {
+      if (!coords.length) return;
+      let minLon = coords[0][0], minLat = coords[0][1], maxLon = coords[0][0], maxLat = coords[0][1];
+      for (const [lon, lat] of coords) {
+        minLon = Math.min(minLon, lon);
+        minLat = Math.min(minLat, lat);
+        maxLon = Math.max(maxLon, lon);
+        maxLat = Math.max(maxLat, lat);
+      }
+      map.fitBounds([[minLon, minLat], [maxLon, maxLat]], { padding: 45, duration: 700 });
+    }
+
+    function renderMap(body) {
+      const driving = body.modes.driving;
+      if (!driving) return;
+
+      const shortest = driving.route_geometry || [];
+      const stepLine = driving.step_path_coordinates || [];
+      const altCoords = (driving.alternatives || []).filter(r => !r.is_shortest).flatMap(r => r.geometry || []);
+
+      const draw = () => {
+        setSource("shortest-src", { type: "Feature", geometry: { type: "LineString", coordinates: shortest }, properties: {} });
+        setSource("step-src", { type: "Feature", geometry: { type: "LineString", coordinates: stepLine }, properties: {} });
+        setSource("alt-src", { type: "Feature", geometry: { type: "LineString", coordinates: altCoords }, properties: {} });
+        setSource("points-src", {
+          type: "FeatureCollection",
+          features: [
+            { type: "Feature", geometry: { type: "Point", coordinates: [body.origin.lon, body.origin.lat] }, properties: { role: "origin" } },
+            { type: "Feature", geometry: { type: "Point", coordinates: [body.destination.lon, body.destination.lat] }, properties: { role: "destination" } }
+          ]
+        });
+
+        ensureLineLayer("alt", "alt-src", "#94a3b8", 4, [1.6, 1.1]);
+        ensureLineLayer("shortest", "shortest-src", "#0f766e", 6, null);
+        ensureLineLayer("stepsline", "step-src", "#d97706", 3, [2, 1.3]);
+        ensurePointsLayer();
+
+        fit(shortest.length ? shortest : stepLine);
+      };
+
+      if (!map.isStyleLoaded()) map.once("load", draw);
+      else draw();
+    }
+
+    function modeCard(name, data) {
+      if (!data) return `<div class="card"><h3>${modeLabels[name]}</h3><div class="line">Route not available</div></div>`;
+      return `<div class="card"><h3>${modeLabels[name]}</h3>
+              <div class="line"><span class="label">Distance:</span> ${data.distance_km.toFixed(2)} km</div>
+              <div class="line"><span class="label">Base time:</span> ${data.base_duration_hm || hm(data.base_duration_min)}</div>
+              <div class="line"><span class="label">Approx time:</span> ${data.traffic_duration_hm || hm(data.traffic_duration_min)}</div></div>`;
+    }
+
+    function renderVehicleInfo(body) {
+      const vehicleInfoBox = document.getElementById("vehicleInfo");
+      const drivingMode = body.modes.driving;
+      if (!drivingMode) {
+        vehicleInfoBox.innerHTML = `<h3 style="margin:0;">Vehicle Information</h3><div class="line">No driving data available</div>`;
+        return;
+      }
+      const tollCount = drivingMode.toll?.count ?? 0;
+      const tollFare = drivingMode.toll?.fare_inr ?? 0;
+      vehicleInfoBox.innerHTML = `
+        <h3 style="margin:0 0 8px;">Vehicle & Toll Information</h3>
+        <div class="line"><span class="label">Vehicle Class:</span> <strong>${body.selected_vehicle_class_label}</strong></div>
+        <div class="line"><span class="label">Toll Plazas (Estimated):</span> <strong>${tollCount}</strong></div>
+        <div class="line"><span class="label">Toll Fare (Estimated):</span> <strong>INR ${tollFare.toFixed(2)}</strong></div>
+      `;
+    }
+
+    function renderAlternatives(driving) {
+      const alternatives = driving?.alternatives || [];
+      if (!alternatives.length) {
+        alternativesBox.innerHTML = "";
+        return;
+      }
+      alternativesBox.innerHTML = `<h3 style="margin:0 0 8px;">Shortest Path Suggestion</h3>` + alternatives.map((r, i) => {
+        const tag = r.is_shortest ? "Suggested shortest" : "Alternative";
+        return `<div class="alt-row"><strong>${tag}</strong> Route ${i + 1}: ${r.distance_km.toFixed(2)} km, ${r.duration_min.toFixed(1)} min</div>`;
+      }).join("");
+    }
+
+    document.getElementById("routeForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      warning.style.display = "none";
+      warning.textContent = "";
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Calculating...";
+
+      const payload = {
+        origin: document.getElementById("origin").value.trim(),
+        destination: document.getElementById("destination").value.trim(),
+        vehicle_class: document.getElementById("vehicleClass").value
+      };
+
+      try {
+        const response = await fetch("/api/route", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.detail || "Failed to fetch route");
+
+        resultCard.style.display = "block";
+        ensureMap();
+
+        summary.innerHTML = `<h3 style="margin:0 0 6px;">Result</h3>
+          <div class="line"><span class="label">Origin:</span> ${body.origin.name}</div>
+          <div class="line"><span class="label">Destination:</span> ${body.destination.name}</div>`;
+
+        renderVehicleInfo(body);
+        modes.innerHTML = Object.keys(modeLabels).map(name => modeCard(name, body.modes[name])).join("");
+        renderAlternatives(body.modes.driving);
+
+        steps.innerHTML = "";
+        const driving = body.modes.driving;
+        if (driving && driving.steps) {
+          driving.steps.forEach((step) => {
+            const li = document.createElement("li");
+            li.textContent = `${step.instruction} (${step.distance_km.toFixed(2)} km)`;
+            steps.appendChild(li);
+          });
+        }
+
+        renderMap(body);
+      } catch (error) {
+        warning.textContent = error.message;
+        warning.style.display = "block";
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Find Shortest Path";
+      }
+    });
+  </script>
+</body>
+</html>

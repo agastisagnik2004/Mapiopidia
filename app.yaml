@@ -1,0 +1,27 @@
+runtime: python312
+
+env: flex
+entrypoint: gunicorn -w 4 -k uvicorn.workers.UvicornWorker backend:app --bind 0.0.0.0:8080
+
+# Set your MAPTILER_API_KEY as an environment variable
+# Option 1: Set directly (NOT recommended for production)
+# env_variables:
+#   MAPTILER_API_KEY: "your_api_key_here"
+#
+# Option 2: Use Google Cloud Secret Manager (RECOMMENDED)
+# First create the secret: gcloud secrets create maptiler-api-key --data-file=- <<< "your_api_key"
+# Then reference it below:
+env_variables:
+  MAPTILER_API_KEY: "sm://maptiler-api-key"
+
+automatic_scaling:
+  min_instances: 1
+  max_instances: 5
+
+health_check:
+  enable_health_check: true
+  check_interval_sec: 30
+  timeout_sec: 5
+  unhealthy_threshold: 3
+  healthy_threshold: 2
+

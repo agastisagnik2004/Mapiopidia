@@ -1,0 +1,24 @@
+# Google Cloud deployment ignore file
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+.env
+.env.local
+.git/
+.gitignore
+*.egg-info/
+dist/
+build/
+*.egg
+.mypy_cache/
+.env.example
+README.md

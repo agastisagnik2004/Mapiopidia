@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Route Planner</title>
+  <style>
+    :root {
+      --bg: #f6f5f0;
+      --card: #ffffff;
+      --ink: #1f2a1f;
+      --muted: #55635a;
+      --accent: #0f766e;
+      --accent-2: #f59e0b;
+      --border: #d9e0d9;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 10% 0%, #e8f6ef 0%, transparent 45%),
+        radial-gradient(circle at 100% 100%, #fff3d8 0%, transparent 40%),
+        var(--bg);
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .shell {
+      max-width: 1000px;
+      margin: 0 auto;
+      display: grid;
+      gap: 16px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 8px 24px rgba(16, 38, 29, 0.06);
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.7rem;
+    }
+    p {
+      margin: 0;
+      color: var(--muted);
+    }
+    form {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .full { grid-column: 1 / -1; }
+    label {
+      font-size: 0.9rem;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 5px;
+    }
+    input, select, button {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font: inherit;
+      background: #fff;
+    }
+    button {
+      background: linear-gradient(120deg, var(--accent), #178f87);
+      color: white;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+    .grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .mode h3 { margin: 0 0 8px; font-size: 1rem; }
+    .line { margin: 4px 0; font-size: 0.95rem; }
+    .label { color: var(--muted); }
+    .ok {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: #e6f7f5;
+      color: #0f766e;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .warn {
+      display: none;
+      margin-top: 8px;
+      color: #b45309;
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 0.9rem;
+    }
+    .steps {
+      max-height: 280px;
+      overflow: auto;
+      padding-left: 20px;
+      margin: 8px 0 0;
+    }
+    .steps li { margin-bottom: 6px; }
+    @media (max-width: 800px) {
+      form, .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="card">
+      <h1>Route Planner</h1>
+      <p>FastAPI backend with route time, traffic impact, toll count, and toll fare by vehicle class.</p>
+    </div>
+
+    <div class="card">
+      <form id="routeForm">
+        <div class="full">
+          <label for="origin">Origin</label>
+          <input id="origin" name="origin" value="Nandakumar, West Bengal, India" required />
+        </div>
+
+        <div class="full">
+          <label for="destination">Destination</label>
+          <input id="destination" name="destination" value="Delhi, India" required />
+        </div>
+
+        <div>
+          <label for="vehicleClass">Vehicle Class</label>
+          <select id="vehicleClass" name="vehicleClass">
+            {% for key, label in vehicle_classes.items() %}
+            <option value="{{ key }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div style="display:flex;align-items:end;">
+          <button id="submitBtn" type="submit">Find Shortest Path</button>
+        </div>
+      </form>
+      <div id="warning" class="warn"></div>
+    </div>
+
+    <div id="resultCard" class="card" style="display:none;">
+      <div id="summary"></div>
+      <div class="grid" id="modes"></div>
+      <div class="card" style="margin-top:12px; padding:12px;">
+        <h3 style="margin:0;">Driving Steps</h3>
+        <ol id="steps" class="steps"></ol>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById("routeForm");
+    const btn = document.getElementById("submitBtn");
+    const warning = document.getElementById("warning");
+    const resultCard = document.getElementById("resultCard");
+    const summary = document.getElementById("summary");
+    const modes = document.getElementById("modes");
+    const steps = document.getElementById("steps");
+
+    const modeLabels = {
+      driving: "Driving",
+      cycling: "Cycling",
+      foot: "Walking"
+    };
+
+    function modeBlock(name, data, selectedVehicleClass) {
+      if (!data) {
+        return `<div class="mode card"><h3>${modeLabels[name]}</h3><div class="line">Route not available</div></div>`;
+      }
+
+      let extras = "";
+      if (name === "driving") {
+        extras = `
+          <div class="line"><span class="label">Traffic time:</span> ${data.traffic_duration_hm}</div>
+          <div class="line"><span class="label">Vehicle class:</span> ${selectedVehicleClass}</div>
+          <div class="line"><span class="label">Estimated toll plazas:</span> ${data.estimated_toll_count}</div>
+          <div class="line"><span class="label">Estimated toll fare:</span> INR ${data.toll_fare_inr.toFixed(2)}</div>
+          <span class="ok">55% traffic delay applied</span>
+        `;
+      }
+
+      return `
+        <div class="mode card">
+          <h3>${modeLabels[name]}</h3>
+          <div class="line"><span class="label">Distance:</span> ${data.distance_km.toFixed(2)} km</div>
+          <div class="line"><span class="label">Base time:</span> ${data.base_duration_hm}</div>
+          <div class="line"><span class="label">Approx time:</span> ${data.traffic_duration_hm}</div>
+          ${extras}
+        </div>
+      `;
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      warning.style.display = "none";
+      warning.textContent = "";
+      btn.disabled = true;
+      btn.textContent = "Calculating...";
+
+      const payload = {
+        origin: document.getElementById("origin").value.trim(),
+        destination: document.getElementById("destination").value.trim(),
+        vehicle_class: document.getElementById("vehicleClass").value
+      };
+
+      try {
+        const response = await fetch("/api/route", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        const body = await response.json();
+        if (!response.ok) {
+          throw new Error(body.detail || "Failed to fetch route");
+        }
+
+        resultCard.style.display = "block";
+        summary.innerHTML = `
+          <h3 style="margin:0 0 6px;">Result</h3>
+          <div class="line"><span class="label">Origin:</span> ${body.origin.name}</div>
+          <div class="line"><span class="label">Destination:</span> ${body.destination.name}</div>
+        `;
+
+        modes.innerHTML = Object.keys(modeLabels)
+          .map((name) => modeBlock(name, body.modes[name], body.selected_vehicle_class))
+          .join("");
+
+        steps.innerHTML = "";
+        const driving = body.modes.driving;
+        if (driving && driving.steps) {
+          driving.steps.forEach((step) => {
+            const li = document.createElement("li");
+            li.textContent = `${step.instruction} (${step.distance_km.toFixed(2)} km)`;
+            steps.appendChild(li);
+          });
+        }
+      } catch (error) {
+        warning.textContent = error.message;
+        warning.style.display = "block";
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Find Shortest Path";
+      }
+    });
+  </script>
+</body>
+</html>
