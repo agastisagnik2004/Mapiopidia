@@ -28,3 +28,8 @@ wheels/
 *.swp
 *.swo
 .DS_Store
+
+# Runtime / local data — never commit these
+users.db
+server.log
+server.err

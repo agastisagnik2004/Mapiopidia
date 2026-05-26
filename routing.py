@@ -2,6 +2,15 @@ from urllib.parse import quote
 
 import requests
 
+try:
+    # On Windows, Python's bundled CA store often misses corporate/system root
+    # certificates. truststore makes Python use the native Windows cert store,
+    # which already trusts every CA that the OS (and browser) trusts.
+    import truststore
+    truststore.inject_into_ssl()
+except ImportError:
+    pass  # non-Windows or truststore not installed — fall back to default SSL
+
 
 VEHICLE_TOLL_RATE_PER_PLAZA = {
     "car_jeep_van": 90,

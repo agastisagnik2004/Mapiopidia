@@ -139,13 +139,213 @@
       border-color: #ff8c00;
       box-shadow: 0 0 0 2px rgba(255, 140, 0, 0.2);
     }
+
+    /* ── Auth bar (header strip) ── */
+    .auth-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .auth-bar .user-pill {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.92rem;
+      color: var(--muted);
+    }
+    .auth-bar .user-pill strong { color: var(--ink); }
+    .link-btn {
+      background: none;
+      border: none;
+      font: inherit;
+      color: var(--accent);
+      cursor: pointer;
+      text-decoration: underline;
+      padding: 0;
+      font-size: 0.92rem;
+    }
+
+    /* ── Auth prompt card (shown when logged out) ── */
+    .auth-prompt {
+      background: linear-gradient(135deg, #f0f9f8 0%, #fff8ee 100%);
+      border: 1.5px solid #a7d8d1;
+      border-radius: 14px;
+      padding: 22px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .auth-prompt .ap-text h3 { margin: 0 0 4px; font-size: 1.05rem; color: var(--ink); }
+    .auth-prompt .ap-text p  { margin: 0; font-size: 0.88rem; color: var(--muted); }
+    .auth-prompt .ap-btns    { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn-primary {
+      display: inline-block;
+      background: linear-gradient(120deg, #0f766e, #178f87);
+      color: #fff;
+      text-decoration: none;
+      border-radius: 9px;
+      padding: 10px 22px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      transition: opacity .15s;
+    }
+    .btn-primary:hover { opacity: .88; }
+    .btn-outline {
+      display: inline-block;
+      background: #fff;
+      color: var(--accent);
+      text-decoration: none;
+      border-radius: 9px;
+      padding: 10px 22px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      border: 2px solid var(--accent);
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-outline:hover { background: #f0f9f8; }
+
+    /* ── Device panel ── */
+    .device-panel {
+      background: #f0f9f8;
+      border: 1px solid #a7d8d1;
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-top: 0;
+    }
+    .device-panel h3 { margin: 0 0 10px; font-size: 1rem; color: var(--accent); }
+    .device-row { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; margin-bottom: 6px; }
+    .device-row .d-label { color: var(--muted); min-width: 100px; }
+    .battery-bar-wrap {
+      flex: 1;
+      background: #d1f0ec;
+      border-radius: 6px;
+      height: 12px;
+      overflow: hidden;
+    }
+    .battery-bar {
+      height: 100%;
+      border-radius: 6px;
+      background: #0f766e;
+      transition: width .6s ease;
+    }
+    .battery-bar.low  { background: #dc2626; }
+    .battery-bar.mid  { background: #d97706; }
+    .device-status {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+    .uid-small {
+      font-family: monospace;
+      font-size: 0.78rem;
+      color: #999;
+      word-break: break-all;
+      margin-top: 4px;
+    }
+
+    /* ── Share panel ── */
+    .share-panel {
+      margin-top: 14px;
+      border-top: 1px solid #d1f0ec;
+      padding-top: 12px;
+    }
+    .share-toggle {
+      cursor: pointer;
+      font-size: 0.92rem;
+      color: var(--accent);
+      user-select: none;
+      padding: 2px 0;
+    }
+    .share-toggle:hover { opacity: .8; }
   </style>
 </head>
 <body>
   <div class="shell">
-    <div class="card">
-      <h1>Mapiopidia</h1>
-      <p><i>Shortest route finder</i></p>
+    <!-- Header bar -->
+    <div class="card auth-bar">
+      <div>
+        <h1 style="display:inline;">Mapiopidia</h1>
+        <span style="color:#ff8c00; font-size:0.95rem; margin-left:8px;"><i>Shortest route finder</i></span>
+      </div>
+      <!-- logged-in pill (hidden until JS confirms session) -->
+      <div class="user-pill" id="userPill" style="display:none;">
+        <span>👤 <strong id="pillName"></strong></span>
+        <button class="link-btn" onclick="doLogout()">Sign out</button>
+      </div>
+    </div>
+
+    <!-- Auth prompt card — shown when NOT logged in -->
+    <div class="card auth-prompt" id="authPrompt" style="display:none;">
+      <div class="ap-text">
+        <h3>🔐 Sign in to track your device</h3>
+        <p>Register once to get a device ID, then your live location &amp; battery appear on the map.</p>
+      </div>
+      <div class="ap-btns">
+        <a class="btn-primary" href="/auth#login">Sign In</a>
+        <a class="btn-outline" href="/auth#signup">Register</a>
+      </div>
+    </div>
+
+    <!-- Device tracking panel (shown when logged in) -->
+    <div class="card device-panel" id="devicePanel" style="display:none;">
+      <h3>📍 My Device</h3>
+      <div class="device-row">
+        <span class="d-label">Location</span>
+        <span id="devLocation" style="color:var(--ink);">Detecting…</span>
+      </div>
+      <div class="device-row">
+        <span class="d-label">Battery</span>
+        <div class="battery-bar-wrap"><div class="battery-bar" id="batteryBar" style="width:0%"></div></div>
+        <span id="batteryPct" style="min-width:48px; font-weight:600;">—</span>
+        <span id="batteryStatus" style="font-size:0.85rem; color:var(--muted);">—</span>
+      </div>
+      <div class="device-status" id="devStatus">Requesting permissions…</div>
+      <div class="uid-small" id="devUID"></div>
+
+      <!-- Share Location sub-panel -->
+      <div class="share-panel" id="sharePanel" style="display:none;">
+        <div class="share-toggle" onclick="toggleShareForm()">
+          📤 <strong>Share My Location</strong>
+          <span id="shareArrow" style="float:right;">▼</span>
+        </div>
+        <div id="shareForm" style="display:none; margin-top:14px;">
+          <label style="font-size:.88rem;font-weight:600;color:var(--ink);
+                        display:block;margin-bottom:8px;">
+            📧 Recipient's email address
+          </label>
+          <input id="shareEmail" type="email" placeholder="friend@example.com"
+                 style="display:block;width:100%;border-radius:10px;
+                        padding:13px 15px;border:2px solid var(--border);
+                        font:inherit;font-size:1rem;color:#1f2a1f;
+                        background:#fff;box-sizing:border-box;
+                        transition:border-color .2s, box-shadow .2s;"
+                 onfocus="this.style.borderColor='#0f766e';this.style.boxShadow='0 0 0 3px rgba(15,118,110,.15)'"
+                 onblur="this.style.borderColor='var(--border)';this.style.boxShadow='none'" />
+          <button onclick="doShareLocation()" id="shareBtn"
+                  style="display:block;width:100%;margin-top:10px;
+                         background:linear-gradient(120deg,#0f766e,#178f87);
+                         color:#fff;border:none;border-radius:10px;
+                         padding:13px;font:inherit;font-size:1rem;
+                         font-weight:700;cursor:pointer;letter-spacing:.02em;">
+            Send Location 📧
+          </button>
+          <div id="shareMsg" style="display:none;margin-top:8px;padding:8px 10px;
+                                    border-radius:8px;font-size:.87rem;"></div>
+          <div id="shareLinkBox" style="display:none;margin-top:10px;padding:10px 12px;
+               background:#f0f9f8;border:1px solid #a7d8d1;border-radius:8px;font-size:.82rem;">
+            <span style="color:var(--muted);">🔗 Share link:</span><br/>
+            <a id="shareLinkA" href="#" target="_blank"
+               style="color:var(--accent);word-break:break-all;"></a>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="card">
@@ -381,6 +581,233 @@
         submitBtn.textContent = "Find Shortest Path";
       }
     });
+
+    // ── Auth & Device Tracking ────────────────────────────────────────────────
+
+    let deviceMarker = null;   // MapLibre marker for this device
+    let devicePopup  = null;
+    let lastBattery  = null;   // cached battery info
+
+    function getToken()  { return localStorage.getItem('mpio_token') || ''; }
+    function getName()   { return localStorage.getItem('mpio_name')  || ''; }
+    function getUID()    { return localStorage.getItem('mpio_uid')   || ''; }
+
+    /** Show/hide auth prompt and user pill based on login state */
+    function renderAuthBar() {
+      const loggedIn = !!getToken();
+      // Header pill (shown when logged in)
+      document.getElementById('userPill').style.display    = loggedIn ? 'flex' : 'none';
+      document.getElementById('pillName').textContent      = getName();
+      // Prominent auth card (shown when logged OUT)
+      document.getElementById('authPrompt').style.display  = loggedIn ? 'none' : '';
+    }
+
+    async function doLogout() {
+      await fetch('/api/logout', {
+        method: 'POST',
+        headers: { 'X-Session-Token': getToken() }
+      }).catch(() => {});
+      localStorage.removeItem('mpio_token');
+      localStorage.removeItem('mpio_name');
+      localStorage.removeItem('mpio_uid');
+      window.location.href = '/auth';
+    }
+
+    /** Update the device panel UI */
+    function updateDevicePanel(lat, lon, batteryLevel, batteryCharging) {
+      document.getElementById('devicePanel').style.display = '';
+      document.getElementById('devUID').textContent = `Device ID: ${getUID()}`;
+
+      // Location
+      document.getElementById('devLocation').textContent =
+        `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+
+      // Battery bar
+      const pct     = Math.round(batteryLevel * 100);
+      const bar     = document.getElementById('batteryBar');
+      const pctEl   = document.getElementById('batteryPct');
+      const statusEl= document.getElementById('batteryStatus');
+      bar.style.width = `${pct}%`;
+      bar.className = 'battery-bar' + (pct <= 20 ? ' low' : pct <= 50 ? ' mid' : '');
+      pctEl.textContent   = `${pct}%`;
+      statusEl.textContent= batteryCharging ? '⚡ Charging' : '🔋 On battery';
+
+      const now = new Date().toLocaleTimeString();
+      document.getElementById('devStatus').textContent = `Last updated: ${now}`;
+    }
+
+    /** Place or move the pulsing "My Device" marker on the map */
+    function placeDeviceMarker(lat, lon, batteryLevel, batteryCharging) {
+      ensureMap();
+
+      const pct = Math.round(batteryLevel * 100);
+      const color = pct <= 20 ? '#dc2626' : pct <= 50 ? '#d97706' : '#0f766e';
+      const icon  = batteryCharging ? '⚡' : '🔋';
+
+      const popupHtml = `
+        <div style="font-family:sans-serif; min-width:150px; padding:4px 0;">
+          <div style="font-weight:700; margin-bottom:6px;">📍 My Device</div>
+          <div style="font-size:0.85rem; color:#555;">
+            ${icon} Battery: <strong style="color:${color}">${pct}%</strong>
+            ${batteryCharging ? '(Charging)' : ''}
+          </div>
+          <div style="font-size:0.78rem; color:#999; margin-top:4px;">
+            ${lat.toFixed(5)}, ${lon.toFixed(5)}
+          </div>
+        </div>`;
+
+      if (!devicePopup) {
+        devicePopup = new maplibregl.Popup({ offset: 25, closeButton: false });
+      }
+      devicePopup.setHTML(popupHtml);
+
+      if (deviceMarker) {
+        deviceMarker.setLngLat([lon, lat]);
+        devicePopup.setLngLat([lon, lat]);
+      } else {
+        // Custom element: pulsing blue dot
+        const el = document.createElement('div');
+        el.style.cssText = `
+          width:18px; height:18px; border-radius:50%;
+          background:#2563eb; border:3px solid #fff;
+          box-shadow:0 0 0 0 rgba(37,99,235,.6);
+          animation:pulse-ring 1.6s ease-out infinite;`;
+        // inject keyframes once
+        if (!document.getElementById('pulse-style')) {
+          const s = document.createElement('style');
+          s.id = 'pulse-style';
+          s.textContent = `@keyframes pulse-ring{0%{box-shadow:0 0 0 0 rgba(37,99,235,.55)}70%{box-shadow:0 0 0 10px rgba(37,99,235,0)}100%{box-shadow:0 0 0 0 rgba(37,99,235,0)}}`;
+          document.head.appendChild(s);
+        }
+        const draw = () => {
+          deviceMarker = new maplibregl.Marker({ element: el, anchor: 'center' })
+            .setLngLat([lon, lat])
+            .setPopup(devicePopup)
+            .addTo(map);
+          deviceMarker.togglePopup();   // open immediately
+        };
+        if (!map.isStyleLoaded()) map.once('load', draw);
+        else draw();
+      }
+    }
+
+    /** Send location + battery to the backend */
+    async function pushDeviceInfo(lat, lon, batteryLevel, batteryCharging) {
+      const token = getToken();
+      if (!token) return;
+      try {
+        await fetch('/api/device/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token, latitude: lat, longitude: lon,
+            battery_level: batteryLevel, battery_charging: batteryCharging
+          })
+        });
+      } catch (_) {}  // silent — UI already shows the data
+    }
+
+    /** Ask the browser for location then battery, update UI + backend */
+    async function trackDevice() {
+      // 1. Geolocation
+      let lat, lon;
+      try {
+        const pos = await new Promise((resolve, reject) =>
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 })
+        );
+        lat = pos.coords.latitude;
+        lon = pos.coords.longitude;
+      } catch (e) {
+        document.getElementById('devStatus').textContent = '⚠️ Location permission denied.';
+        return;
+      }
+
+      // 2. Battery (not all browsers support this)
+      let batteryLevel = 1.0, batteryCharging = false;
+      try {
+        const bat = await navigator.getBattery();
+        batteryLevel   = bat.level;
+        batteryCharging= bat.charging;
+        lastBattery    = bat;
+
+        // Live updates when battery state changes
+        bat.onlevelchange   = () => trackDevice();
+        bat.onchargingchange= () => trackDevice();
+      } catch (_) {
+        // Battery API unavailable — use fallback
+        document.getElementById('batteryStatus') &&
+          (document.getElementById('batteryStatus').textContent = '(Battery API unavailable)');
+      }
+
+      updateDevicePanel(lat, lon, batteryLevel, batteryCharging);
+      placeDeviceMarker(lat, lon, batteryLevel, batteryCharging);
+      pushDeviceInfo(lat, lon, batteryLevel, batteryCharging);
+
+      // Reveal the share panel once we have a location
+      document.getElementById('sharePanel').style.display = '';
+    }
+
+    // ── Share Location ────────────────────────────────────────────────────────
+
+    function toggleShareForm() {
+      const form  = document.getElementById('shareForm');
+      const arrow = document.getElementById('shareArrow');
+      const open  = form.style.display === 'none';
+      form.style.display  = open ? '' : 'none';
+      arrow.textContent   = open ? '▲' : '▼';
+    }
+
+    function showShareMsg(text, type) {
+      const el = document.getElementById('shareMsg');
+      el.textContent = text;
+      el.style.display  = 'block';
+      el.style.background = type === 'ok'  ? '#f0fdf4' : '#fff1f1';
+      el.style.border     = type === 'ok'  ? '1px solid #bbf7d0' : '1px solid #fecaca';
+      el.style.color      = type === 'ok'  ? '#166534' : '#dc2626';
+    }
+
+    async function doShareLocation() {
+      const email = document.getElementById('shareEmail').value.trim();
+      if (!email) { showShareMsg('Please enter a recipient email.', 'err'); return; }
+
+      const btn = document.getElementById('shareBtn');
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+      document.getElementById('shareMsg').style.display = 'none';
+      document.getElementById('shareLinkBox').style.display = 'none';
+
+      try {
+        const res  = await fetch('/api/share-location', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: getToken(), recipient_email: email }),
+        });
+        const data = await res.json();
+        if (!res.ok) { showShareMsg(data.detail || 'Failed to send.', 'err'); return; }
+
+        showShareMsg(`✅ ${data.message}`, 'ok');
+
+        // Show the shareable link
+        const linkBox = document.getElementById('shareLinkBox');
+        const linkA   = document.getElementById('shareLinkA');
+        linkA.href = data.share_url;
+        linkA.textContent = data.share_url;
+        linkBox.style.display = '';
+      } catch (e) {
+        showShareMsg('Network error. Try again.', 'err');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Send 📧';
+      }
+    }
+
+    // ── Init ──────────────────────────────────────────────────────────────────
+    renderAuthBar();
+    if (getToken()) {
+      trackDevice();   // start tracking immediately when logged in
+      // Refresh location every 60 seconds
+      setInterval(trackDevice, 60_000);
+    }
   </script>
 </body>
 </html>

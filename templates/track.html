@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>📍 {{ user.name }}'s Location – Mapiopidia</title>
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet"/>
+  <style>
+    :root{
+      --bg:#f6f5f0; --card:#fff; --ink:#1f2a1f; --muted:#55635a;
+      --accent:#0f766e; --border:#d9e0d9; --orange:#ff8c00;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{
+      font-family:"Segoe UI",Tahoma,Geneva,Verdana,sans-serif;
+      background:radial-gradient(circle at 10% 0%,#e8f6ef 0%,transparent 45%),
+                 radial-gradient(circle at 100% 100%,#fff3d8 0%,transparent 40%),
+                 var(--bg);
+      min-height:100vh; padding:18px;
+    }
+    .shell{max-width:820px;margin:0 auto;display:grid;gap:14px;}
+
+    /* Header */
+    .header{
+      background:linear-gradient(120deg,#0f766e,#178f87);
+      border-radius:14px; padding:18px 22px;
+      display:flex; align-items:center; justify-content:space-between;
+      flex-wrap:wrap; gap:10px;
+    }
+    .header h1{color:#fff;font-size:1.4rem;margin:0;}
+    .header p{color:#ccefec;font-size:.88rem;margin:0;}
+    .header a{color:#ccefec;font-size:.85rem;text-decoration:underline;}
+
+    /* Info card */
+    .info-card{
+      background:var(--card); border:1px solid var(--border);
+      border-radius:14px; padding:18px 20px;
+      box-shadow:0 6px 20px rgba(16,38,29,.06);
+    }
+    .info-card h2{font-size:1.1rem;color:var(--ink);margin-bottom:12px;}
+    .row{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:.92rem;}
+    .row .lbl{color:var(--muted);min-width:110px;}
+    .coord{font-family:monospace;color:var(--accent);font-weight:600;}
+
+    /* Battery bar */
+    .bat-wrap{flex:1;background:#e2f0ee;border-radius:6px;height:12px;overflow:hidden;}
+    .bat-fill{height:100%;border-radius:6px;transition:width .5s ease;}
+
+    /* Map */
+    #trackMap{
+      width:100%;height:420px;border-radius:14px;
+      border:1px solid var(--border);overflow:hidden;
+    }
+
+    /* Status strip */
+    .status-strip{
+      text-align:center;font-size:.82rem;color:var(--muted);
+      padding:6px 0;
+    }
+    .dot{
+      display:inline-block;width:8px;height:8px;border-radius:50%;
+      background:#16a34a;margin-right:5px;
+      animation:blink 1.4s ease-in-out infinite;
+    }
+    .dot.stale{background:#d97706;}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+    /* Open-map links */
+    .map-links{display:flex;gap:10px;flex-wrap:wrap;}
+    .map-link{
+      display:inline-block;padding:9px 16px;border-radius:9px;
+      font-size:.88rem;font-weight:600;text-decoration:none;
+      border:2px solid var(--accent);color:var(--accent);
+      transition:background .15s;
+    }
+    .map-link:hover{background:#f0f9f8;}
+    .map-link.filled{background:var(--accent);color:#fff;border-color:var(--accent);}
+    .map-link.filled:hover{opacity:.88;}
+
+    .maplibregl-ctrl-attrib{display:none!important;}
+
+    @keyframes pulse-ring{
+      0%  {box-shadow:0 0 0 0 rgba(37,99,235,.55)}
+      70% {box-shadow:0 0 0 10px rgba(37,99,235,0)}
+      100%{box-shadow:0 0 0 0 rgba(37,99,235,0)}
+    }
+  </style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <h1>📍 {{ user.name }}'s Location</h1>
+      <p>Live location shared via Mapiopidia</p>
+    </div>
+    <a href="/">← Back to Mapiopidia</a>
+  </div>
+
+  <!-- Info card -->
+  <div class="info-card">
+    <h2>Device Info</h2>
+
+    <div class="row">
+      <span class="lbl">Name</span>
+      <strong id="uName">{{ user.name }}</strong>
+    </div>
+    <div class="row">
+      <span class="lbl">Coordinates</span>
+      <span class="coord" id="uCoords">
+        {{ "%.6f"|format(user.latitude) }}, {{ "%.6f"|format(user.longitude) }}
+      </span>
+    </div>
+    <div class="row">
+      <span class="lbl">Battery</span>
+      <div class="bat-wrap">
+        <div class="bat-fill" id="batFill"
+             style="width:{{ (user.battery_level * 100)|int }}%;
+                    background:{% if user.battery_level <= 0.2 %}#dc2626
+                               {% elif user.battery_level <= 0.5 %}#d97706
+                               {% else %}#16a34a{% endif %};"></div>
+      </div>
+      <span id="batPct" style="min-width:46px;font-weight:700;">
+        {{ (user.battery_level * 100)|int }}%
+      </span>
+      <span id="batStatus" style="color:var(--muted);font-size:.85rem;">
+        {{ "⚡ Charging" if user.battery_charging else "🔋 On battery" }}
+      </span>
+    </div>
+    <div class="row">
+      <span class="lbl">Last updated</span>
+      <span id="uLastSeen" style="color:var(--muted);">{{ user.last_seen or "—" }}</span>
+    </div>
+
+    <div class="map-links" style="margin-top:14px;">
+      <a class="map-link filled" id="gmapsLink"
+         href="https://www.google.com/maps?q={{ user.latitude }},{{ user.longitude }}&z=15"
+         target="_blank">📌 Google Maps</a>
+      <a class="map-link" id="osmLink"
+         href="https://www.openstreetmap.org/?mlat={{ user.latitude }}&mlon={{ user.longitude }}#map=15/{{ user.latitude }}/{{ user.longitude }}"
+         target="_blank">🗺️ OpenStreetMap</a>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div class="status-strip">
+    <span class="dot" id="liveDot"></span>
+    <span id="liveStatus">Connecting…</span>
+    &nbsp;·&nbsp; Auto-refreshes every 30 s
+  </div>
+
+  <!-- Map -->
+  <div id="trackMap"></div>
+
+</div><!-- /shell -->
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script>
+  const SHARE_TOKEN = "{{ share_token }}";
+  const MAPTILER   = "{{ maptiler_key }}";
+  let map, marker, popup;
+
+  // ── Init map ────────────────────────────────────────────────────────────────
+  const initLat = {{ user.latitude }};
+  const initLon = {{ user.longitude }};
+
+  map = new maplibregl.Map({
+    container: "trackMap",
+    style: `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER}`,
+    center: [initLon, initLat],
+    zoom: 14,
+    attributionControl: false,
+  });
+  map.addControl(new maplibregl.NavigationControl(), "top-right");
+
+  function buildEl() {
+    const el = document.createElement("div");
+    el.style.cssText =
+      "width:20px;height:20px;border-radius:50%;background:#2563eb;" +
+      "border:3px solid #fff;box-shadow:0 0 0 0 rgba(37,99,235,.6);" +
+      "animation:pulse-ring 1.6s ease-out infinite;";
+    return el;
+  }
+
+  function buildPopupHtml(d) {
+    const pct   = Math.round((d.battery_level ?? 0) * 100);
+    const color = pct <= 20 ? "#dc2626" : pct <= 50 ? "#d97706" : "#16a34a";
+    const icon  = d.battery_charging ? "⚡" : "🔋";
+    return `
+      <div style="font-family:sans-serif;min-width:160px;padding:4px 0;">
+        <div style="font-weight:700;margin-bottom:6px;">📍 ${d.name}</div>
+        <div style="font-size:.85rem;color:#555;">
+          ${icon} Battery: <strong style="color:${color}">${pct}%</strong>
+          ${d.battery_charging ? "(Charging)" : ""}
+        </div>
+        <div style="font-size:.78rem;color:#999;margin-top:4px;">
+          ${d.latitude.toFixed(6)}, ${d.longitude.toFixed(6)}
+        </div>
+      </div>`;
+  }
+
+  map.once("load", () => {
+    popup  = new maplibregl.Popup({ offset: 25, closeButton: false })
+      .setHTML(buildPopupHtml({
+        name: "{{ user.name }}",
+        battery_level: {{ user.battery_level }},
+        battery_charging: {{ "true" if user.battery_charging else "false" }},
+        latitude: initLat, longitude: initLon,
+      }));
+    marker = new maplibregl.Marker({ element: buildEl(), anchor: "center" })
+      .setLngLat([initLon, initLat])
+      .setPopup(popup)
+      .addTo(map);
+    marker.togglePopup();
+    setLive(true);
+  });
+
+  // ── Live status helpers ─────────────────────────────────────────────────────
+  function setLive(ok) {
+    const dot = document.getElementById("liveDot");
+    const txt = document.getElementById("liveStatus");
+    dot.className = ok ? "dot" : "dot stale";
+    txt.textContent = ok ? "Live" : "Connection lost – retrying…";
+  }
+
+  function fmtTime(iso) {
+    if (!iso) return "—";
+    try {
+      const d = new Date(iso + "Z");   // treat as UTC
+      return d.toLocaleString();
+    } catch { return iso; }
+  }
+
+  // ── Refresh data ────────────────────────────────────────────────────────────
+  async function refresh() {
+    try {
+      const res = await fetch(`/api/track/${SHARE_TOKEN}`);
+      if (!res.ok) { setLive(false); return; }
+      const d = await res.json();
+
+      // Update map marker
+      const lngLat = [d.longitude, d.latitude];
+      if (marker) {
+        marker.setLngLat(lngLat);
+        popup.setHTML(buildPopupHtml(d)).setLngLat(lngLat);
+        map.easeTo({ center: lngLat, duration: 800 });
+      }
+
+      // Update info card
+      const pct   = Math.round((d.battery_level ?? 0) * 100);
+      const color = pct <= 20 ? "#dc2626" : pct <= 50 ? "#d97706" : "#16a34a";
+      document.getElementById("uCoords").textContent =
+        `${d.latitude.toFixed(6)}, ${d.longitude.toFixed(6)}`;
+      document.getElementById("batFill").style.width      = `${pct}%`;
+      document.getElementById("batFill").style.background = color;
+      document.getElementById("batPct").textContent       = `${pct}%`;
+      document.getElementById("batStatus").textContent    =
+        d.battery_charging ? "⚡ Charging" : "🔋 On battery";
+      document.getElementById("uLastSeen").textContent    = fmtTime(d.last_seen);
+
+      // Update map links
+      document.getElementById("gmapsLink").href =
+        `https://www.google.com/maps?q=${d.latitude},${d.longitude}&z=15`;
+      document.getElementById("osmLink").href =
+        `https://www.openstreetmap.org/?mlat=${d.latitude}&mlon=${d.longitude}#map=15/${d.latitude}/${d.longitude}`;
+
+      setLive(true);
+    } catch { setLive(false); }
+  }
+
+  // Auto-refresh every 30 s
+  setInterval(refresh, 30_000);
+</script>
+</body>
+</html>

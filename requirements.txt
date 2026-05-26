@@ -2,6 +2,8 @@ fastapi
 uvicorn[standard]
 jinja2
 requests
+certifi
+truststore
 python-dotenv
 gunicorn
 
